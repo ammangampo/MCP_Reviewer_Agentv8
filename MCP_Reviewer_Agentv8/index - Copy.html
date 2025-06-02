@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Code Review with GPT-4</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    textarea {
+      width: 100%;
+      font-family: monospace;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+
+    #progressBar {
+      width: 100%;
+      background-color: #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 20px;
+      height: 20px;
+    }
+
+    #progress {
+      width: 0%;
+      height: 100%;
+      background-color: #4CAF50;
+      transition: width 0.3s ease;
+    }
+
+    #output {
+      white-space: pre-wrap;
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 5px;
+      max-height: 400px;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <h2>Code Review with Progress</h2>
+  <textarea id="codeInput" rows="15" placeholder="Paste your code here..."></textarea><br>
+  <button id="startBtn" onclick="startReview()">Start Review</button>
+
+  <div id="progressBar"><div id="progress"></div></div>
+  <div id="output"></div>
+
+  <script>
+    function startReview() {
+      const code = document.getElementById("codeInput").value;
+      const output = document.getElementById("output");
+      const progress = document.getElementById("progress");
+      const button = document.getElementById("startBtn");
+
+      if (!code.trim()) {
+        alert("Please paste some code to review.");
+        return;
+      }
+
+      output.textContent = '🔍 Reviewing code, please wait...\n\n';
+      progress.style.width = '0%';
+      button.disabled = true;
+
+      const eventSource = new EventSource(`/api/stream-review?code=${encodeURIComponent(code)}`);
+
+      let totalChunks = 1;
+      let receivedChunks = 0;
+
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.error) {
+          output.textContent += `❌ ${data.error}\n\n`;
+          eventSource.close();
+          button.disabled = false;
+          return;
+        }
+
+        if (data.done) {
+          output.textContent += "✅ Review complete.";
+          eventSource.close();
+          button.disabled = false;
+          return;
+        }
+
+        if (data.totalChunks && receivedChunks === 0) {
+          totalChunks = data.totalChunks;
+        }
+
+        receivedChunks++;
+        const percent = Math.round((receivedChunks / totalChunks) * 100);
+        progress.style.width = `${percent}%`;
+
+        output.textContent += `### Review for Lines ${data.range[0]}–${data.range[1]}\n\n${data.content}\n\n`;
+        output.scrollTop = output.scrollHeight;
+      };
+
+      eventSource.onerror = () => {
+        output.textContent += "⚠️ Connection lost or server error.\n";
+        progress.style.width = '0%';
+        button.disabled = false;
+        eventSource.close();
+      };
+    }
+  </script>
+</body>
+</html>

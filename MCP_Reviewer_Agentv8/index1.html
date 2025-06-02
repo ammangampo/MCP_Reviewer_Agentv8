@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Code Review with GPT-4</title>
+  <style>
+    #progressBar {
+      width: 100%;
+      background-color: #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 20px;
+    }
+
+    #progress {
+      width: 0%;
+      height: 20px;
+      background-color: #4CAF50;
+      transition: width 0.3s ease;
+    }
+
+    #output {
+      white-space: pre-wrap;
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Code Review with Progress</h2>
+  <textarea id="codeInput" rows="15" cols="80" placeholder="Paste your code here..."></textarea><br>
+  <button onclick="startReview()">Start Review</button>
+
+  <div id="progressBar"><div id="progress"></div></div>
+  <div id="output"></div>
+
+  <script>
+    function startReview() {
+      const code = document.getElementById("codeInput").value;
+      const output = document.getElementById("output");
+      const progress = document.getElementById("progress");
+
+      output.textContent = '';
+      progress.style.width = '0%';
+
+      const eventSource = new EventSource(`/api/stream-review?code=${encodeURIComponent(code)}`);
+
+      let totalChunks = 1; // will be updated when first chunk is received
+      let receivedChunks = 0;
+
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.done) {
+          eventSource.close();
+          return;
+        }
+
+        if (data.error) {
+          output.textContent += `❌ ${data.error}\n\n`;
+          return;
+        }
+
+        totalChunks = data.totalChunks;
+        receivedChunks++;
+
+        const percent = Math.round((receivedChunks / totalChunks) * 100);
+        progress.style.width = `${percent}%`;
+
+        output.textContent += `### Review for Lines ${data.range[0]}-${data.range[1]}\n\n${data.content}\n\n`;
+      };
+    }
+  </script>
+</body>
+</html>
